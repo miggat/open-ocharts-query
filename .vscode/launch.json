@@ -1,0 +1,43 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug open-ocharts-provider with xvfb",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "/home/pi/projects/open-ocharts-provider/build/open-ocharts-provider",
+      "args": [
+        "/home/pi/projects/open-ocharts-provider/", //Directory containing libo-charts_pi.so  ORIGINAL: /usr/lib/avnav/plugins/ocharts/lib/opencpn          /home/pi/.var/app/org.opencpn.OpenCPN/lib/opencpn/
+        "/home/pi/projects/open-ocharts-provider/data", // Data directory used to laod /home/pi/projects/open-ocharts-provider/data/s57data/chartsymbols.xml ORIGINAL: /usr/lib/avnav/plugins/ocharts/share/opencpn
+        "/home/pi/projects/open-ocharts-provider/", // Private (or config) dir. Where to find avnav.conf   ORIGINAL: /home/pi/projects/open-ocharts-provider
+        "10589",
+        "-l", "logs/provider.log",
+        "-u", "/home/pi/Charts",
+        "-d", 1
+      ],
+      "environment": [
+        {
+          "name": "DISPLAY",
+          "value": ":99"
+        },
+        {
+          "name": "LD_LIBRARY_PATH",
+          "value": "/home/pi/.var/app/org.opencpn.OpenCPN/lib"
+        }
+      ],
+      "preLaunchTask": "start-xvfb",
+      "stopAtEntry": false,
+      "cwd": "/home/pi/projects/open-ocharts-provider",
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "miDebuggerPath": "/usr/bin/gdb",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ]
+    }
+  ]
+}

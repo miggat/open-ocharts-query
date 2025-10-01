@@ -1,0 +1,51 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Build open-ocharts-provider",
+            "type": "shell",
+            "command": "mkdir -p build && cd build && cmake .. && make -j$(nproc)",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": [],
+            "detail": "Builds open-ocharts-provider using cmake and make"
+        },
+        {
+            "label": "Clean and Build open-ocharts-provider",
+            "type": "shell",
+            "command": "rm -rf build && mkdir build && cd build && cmake .. && make -j$(nproc)",
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            },
+            "problemMatcher": [],
+            "detail": "Cleans build folder and rebuilds open-ocharts-provider"
+        },
+        {
+            "label": "Run open-ocharts-provider (debug)",
+            "type": "shell",
+            "command": "./build/open-ocharts-provider",
+            "group": {
+                "kind": "test",
+                "isDefault": true
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": true,
+                "panel": "dedicated",
+                "clear": false
+            },
+            "problemMatcher": [],
+            "detail": "Runs the open-ocharts-provider server in debug mode"
+        },
+        {
+            "label": "start-xvfb",
+            "type": "shell",
+            "command": "pgrep Xvfb || (Xvfb :99 -screen 0 512x512x24 & sleep 1)",
+            "problemMatcher": []
+        }
+    ]
+}

@@ -1,0 +1,77 @@
+# Prerequisites
+*.d
+
+# Compiled Object files
+*.slo
+*.lo
+*.o
+*.obj
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Compiled Dynamic libraries
+*.so
+*.dylib
+*.dll
+
+# Fortran module files
+*.mod
+*.smod
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+*.lib
+
+# Executables
+*.exe
+*.out
+*.app
+build/cmake_install.cmake
+build/CMakeCache.txt
+build/Makefile
+build/open-ocharts-provider
+build/CMakeFiles/cmake.check_cache
+build/CMakeFiles/CMakeDirectoryInformation.cmake
+build/CMakeFiles/CMakeOutput.log
+build/CMakeFiles/Makefile.cmake
+build/CMakeFiles/Makefile2
+build/CMakeFiles/progress.marks
+build/CMakeFiles/TargetDirectories.txt
+build/CMakeFiles/3.25.1/CMakeCXXCompiler.cmake
+build/CMakeFiles/3.25.1/CMakeDetermineCompilerABI_CXX.bin
+build/CMakeFiles/3.25.1/CMakeSystem.cmake
+build/CMakeFiles/3.25.1/CompilerIdCXX/CMakeCXXCompilerId.cpp
+build/CMakeFiles/open-ocharts-provider.dir/build.make
+build/CMakeFiles/open-ocharts-provider.dir/cmake_clean.cmake
+build/CMakeFiles/open-ocharts-provider.dir/compiler_depend.internal
+build/CMakeFiles/open-ocharts-provider.dir/compiler_depend.make
+build/CMakeFiles/open-ocharts-provider.dir/compiler_depend.ts
+build/CMakeFiles/open-ocharts-provider.dir/depend.make
+build/CMakeFiles/open-ocharts-provider.dir/DependInfo.cmake
+build/CMakeFiles/open-ocharts-provider.dir/flags.make
+build/CMakeFiles/open-ocharts-provider.dir/link.txt
+build/CMakeFiles/open-ocharts-provider.dir/progress.make
+logs/provider.log
+logs/provider.log.2025-04-30-17-14-40
+logs/provider.log.2025-04-30-17-19-11
+logs/provider.log.2025-04-30-17-20-43
+logs/provider.log.2025-04-30-17-25-58
+logs/provider.log.2025-04-30-17-34-56
+logs/provider.log.2025-04-30-17-48-27
+logs/provider.log.2025-04-30-17-53-16
+logs/provider.log.2025-04-30-17-55-17
+build/.cmake/api/v1/query/client-vscode/query.json
+build/.cmake/api/v1/reply/cache-v2-e4bd716e28656fdaad49.json
+build/.cmake/api/v1/reply/cmakeFiles-v1-99469eb325bf2de35e51.json
+build/.cmake/api/v1/reply/codemodel-v2-9512357fe4f75f25497e.json
+build/.cmake/api/v1/reply/directory-.-Debug-f5ebdc15457944623624.json
+build/.cmake/api/v1/reply/index-2025-04-30T15-47-54-0663.json
+build/.cmake/api/v1/reply/target-open-ocharts-provider-Debug-01b879112c89b9070e0a.json
+build/.cmake/api/v1/reply/toolchains-v1-598435a6a7594f6437f7.json
+logs
+build
+CS_home_pi_Charts_oeuSENC-ESmed.avcache
