@@ -1,1 +1,1 @@
-# open-ocharts-provider
+# open-ocharts-query

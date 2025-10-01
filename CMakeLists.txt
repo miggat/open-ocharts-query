@@ -1,7 +1,7 @@
-# open-ocharts-provider CMakeLists.txt (cleaned for Linux-only build)
+# open-ocharts-query CMakeLists.txt (cleaned for Linux-only build)
 
 cmake_minimum_required(VERSION 3.10)
-project(open-ocharts-provider LANGUAGES C CXX)
+project(open-ocharts-query LANGUAGES C CXX)
 
 set(CMAKE_BUILD_TYPE Debug)
 set(CMAKE_CXX_STANDARD 11)
@@ -101,7 +101,6 @@ target_link_libraries(${PROJECT_NAME}
     ${OPENGL_LIBRARIES}
     dl
 )
-
 
 
 # Link against dl for Unix

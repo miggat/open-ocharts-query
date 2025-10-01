@@ -15,7 +15,7 @@ fi
 PLUGIN_DIR="$PDIR"
 DATA_DIR="$PDIR/data"
 CONFIG_DIR="$PDIR"
-PORT="10589"
+PORT="10689"
 
 LOG_FILE="/tmp/ocharts-script.stdout.log"
 echo "$(date) - script started" >> "$LOG_FILE"
@@ -29,7 +29,7 @@ export DISPLAY=:$display
 export LD_LIBRARY_PATH=/home/pi/.var/app/org.opencpn.OpenCPN/lib
 
 xvfb-run -n "$display" -s "-screen 0 512x512x24" \
-  "$PLUGIN_DIR/build/open-ocharts-provider" \
+  "$PLUGIN_DIR/build/open-ocharts-query" \
   "$PLUGIN_DIR" \
   "$DATA_DIR" \
   "$CONFIG_DIR" \

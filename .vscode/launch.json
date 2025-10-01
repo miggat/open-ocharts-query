@@ -2,16 +2,16 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Debug open-ocharts-provider with xvfb",
+      "name": "Debug open-ocharts-query with xvfb",
       "type": "cppdbg",
       "request": "launch",
-      "program": "/home/pi/projects/open-ocharts-provider/build/open-ocharts-provider",
+      "program": "/home/pi/projects/open-ocharts-query/build/open-ocharts-query",
       "args": [
-        "/home/pi/projects/open-ocharts-provider/", //Directory containing libo-charts_pi.so  ORIGINAL: /usr/lib/avnav/plugins/ocharts/lib/opencpn          /home/pi/.var/app/org.opencpn.OpenCPN/lib/opencpn/
-        "/home/pi/projects/open-ocharts-provider/data", // Data directory used to laod /home/pi/projects/open-ocharts-provider/data/s57data/chartsymbols.xml ORIGINAL: /usr/lib/avnav/plugins/ocharts/share/opencpn
-        "/home/pi/projects/open-ocharts-provider/", // Private (or config) dir. Where to find avnav.conf   ORIGINAL: /home/pi/projects/open-ocharts-provider
-        "10589",
-        "-l", "logs/provider.log",
+        "/home/pi/projects/open-ocharts-query/", //Directory containing libo-charts_pi.so  ORIGINAL: /usr/lib/avnav/plugins/ocharts/lib/opencpn          /home/pi/.var/app/org.opencpn.OpenCPN/lib/opencpn/
+        "/home/pi/projects/open-ocharts-query/data", // Data directory used to laod /home/pi/projects/open-ocharts-query/data/s57data/chartsymbols.xml ORIGINAL: /usr/lib/avnav/plugins/ocharts/share/opencpn
+        "/home/pi/projects/open-ocharts-query/", // Private (or config) dir. Where to find avnav.conf   ORIGINAL: /home/pi/projects/open-ocharts-query
+        "10689",
+        "-l", "logs/query.log",
         "-u", "/home/pi/Charts",
         "-d", 1
       ],
@@ -27,7 +27,7 @@
       ],
       "preLaunchTask": "start-xvfb",
       "stopAtEntry": false,
-      "cwd": "/home/pi/projects/open-ocharts-provider",
+      "cwd": "/home/pi/projects/open-ocharts-query",
       "externalConsole": false,
       "MIMode": "gdb",
       "miDebuggerPath": "/usr/bin/gdb",
