@@ -1,304 +1,115 @@
 /******************************************************************************
  *
- * Project:  AvNav ocharts-provider
- * Purpose:  Chart Request Handler
- * Author:   Andreas Vogel
+ * Project:  open-ocharts-query
+ * Purpose:  Chart FeatureInfo Request Handler (z/x/y via query)
  *
  ***************************************************************************
- *   Copyright (C) 2020 by Andreas Vogel   *
- *                                                                         *
- *   This program is free software; you can redistribute it and/or modify  *
- *   it under the terms of the GNU General Public License as published by  *
- *   the Free Software Foundation; either version 2 of the License, or     *
- *   (at your option) any later version.                                   *
- *                                                                         *
- *   This program is distributed in the hope that it will be useful,       *
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
- *   GNU General Public License for more details.                          *
- *                                                                         *
- *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301,  USA.             *
+ *   GPL v2+
  ***************************************************************************
- *
  */
 #ifndef CHARTREQUESTHANDLER_H
 #define CHARTREQUESTHANDLER_H
+
 #include "RequestHandler.h"
 #include "Logger.h"
 #include "ChartList.h"
 #include "Renderer.h"
 #include "TokenHandler.h"
-#include "SimpleThread.h"
+
 #include <wx/string.h>
-#include <wx/tokenzr.h>
-#include <wx/filename.h>
+#include <cstdlib> // atoi, atof
 
-static wxString AVNAV_FORMAT("<?xml version=\"1.0\" encoding=\"UTF-8\" ?>"
-                             "<TileMapService version=\"1.0.0\" >"
-                             "<Title>%s</Title>"
-                             "<TileMaps>"
-                             "<TileMap"
-                             " title=\"%s\""
-                             " href=\"http://%s:%d%s\""
-                             " minzoom=\"%d\""
-                             " maxzoom=\"%d\""
-                             " projection=\"EPSG:4326\">"
-                             "<BoundingBox minlon=\"%f\" minlat=\"%f\" maxlon=\"%f\" maxlat=\"%f\" title=\"layer\"/>"
-                             "<TileFormat width=\"256\" height=\"256\" mime-type=\"x-png\" extension=\"png\" />"
-                             "</TileMap>"
-                             "</TileMaps>"
-                             "</TileMapService>");
-
-static wxString DEFAULT_EULA("<html>"
-                             "<body>"
-                             "<p>No license file found</p>"
-                             "<p>Refer to <a href=\"https://o-charts.org/\">o-charts</a> for license info.</p>"
-                             "</body"
-                             "</html>");
 class ChartRequestHandler : public RequestHandler
 {
 public:
+    // Prefijo de charts
     const wxString URL_PREFIX = wxT("/charts/");
-    const wxString avnavXml = wxT("avnav.xml");
 
 private:
-    TokenHandler *tokenHandler;
-    ChartSet *set;
+    ChartSet* set;
     wxString name;
     wxString urlPrefix;
-    ChartSetInfo info;
-    HTTPResponse *handleOverviewRequest(HTTPRequest *request)
-    {
-        int minZoom;
-        int maxZoom;
-        BoundingBox b;
-        set->GetOverview(minZoom, maxZoom, b);
-        wxString data = wxString::Format(AVNAV_FORMAT,
-                                         name, name, request->serverIp, request->serverPort, urlPrefix, minZoom, maxZoom,
-                                         b.minLon, b.minLat, b.maxLon, b.maxLat);
-        HTTPResponse *rt = new HTTPStringResponse("application/xml", data);
-        rt->responseHeaders["Access-Control-Allow-Origin"] = "*";
-        return rt;
-    }
-
-    HTTPResponse *tryOpenFile(wxString base, wxString file, wxString mimeType)
-    {
-        wxFileName fileName(base, file);
-        fileName.MakeAbsolute();
-        if (!wxFileExists(fileName.GetFullPath()))
-        {
-            return NULL;
-        }
-        LOG_DEBUG(wxT("open file %s"), fileName.GetFullPath());
-        wxFileInputStream *stream = new wxFileInputStream(fileName.GetFullPath());
-        if (!stream->IsOk())
-        {
-            delete stream;
-            return NULL;
-        }
-        HTTPResponse *rt = new HTTPStreamResponse(mimeType, stream, stream->GetFile()->Length());
-        rt->responseHeaders["Access-Control-Allow-Origin"] = "*";
-        return rt;
-    }
-    HTTPResponse *handleEulaRequest(HTTPRequest *request)
-    {
-        // Accept-Language: de-DE,de;q=0.9,en-US;q=0.8,en;q=0.7,es;q=0.6
-        wxString languageHeader = "en";
-        NameValueMap::iterator it = request->header.find("accept-language");
-        if (it != request->header.end())
-        {
-            languageHeader = it->second + "," + languageHeader;
-        }
-        LOG_DEBUG(wxT("EULA request for %s, languages=%s"), name, languageHeader);
-        wxStringTokenizer tokenizer(it->second, ",");
-        wxString lang = tokenizer.GetNextToken();
-        HTTPResponse *rt = NULL;
-        std::vector<wxString>::iterator fit;
-        while (lang != wxEmptyString)
-        {
-            if (lang.Find(';') >= 0)
-            {
-                lang = lang.Before(';');
-            }
-            for (fit = info.eulaFiles.begin(); fit != info.eulaFiles.end(); fit++)
-            {
-                if (fit->StartsWith(lang.Upper() + "_"))
-                {
-                    rt = tryOpenFile(info.dirname, *fit, "text/html");
-                    if (rt != NULL)
-                    {
-                        LOG_DEBUG(wxT("found existing eula file %s for %s"), *fit, lang);
-                        return rt;
-                    }
-                }
-            }
-            lang = tokenizer.GetNextToken();
-        }
-        // did not find any eula file matching our languages, try any...
-        for (fit = info.eulaFiles.begin(); fit != info.eulaFiles.end(); fit++)
-        {
-            rt = tryOpenFile(info.dirname, *fit, "text/html");
-            if (rt != NULL)
-            {
-                LOG_DEBUG(wxT("found existing eula file %s for any"), *fit);
-                return rt;
-            }
-        }
-        // no eula file - use default
-        rt = new HTTPStringResponse("text/html", DEFAULT_EULA);
-        rt->responseHeaders["Access-Control-Allow-Origin"] = "*";
-        return rt;
-    }
-
-    HTTPResponse *handleSequenceRequest()
-    {
-        wxString data = wxString::Format(
-            "{" JSON_SV(status, OK) "," JSON_IV(sequence, % ld) "}",
-            this->set->GetSequence());
-        HTTPResponse *rt = new HTTPStringResponse("application/json", data);
-        rt->responseHeaders["Access-Control-Allow-Origin"] = "*";
-        return rt;
-    }
 
 public:
-    /**
-     * create a request handler
-     * @param chartList
-     * @param name url compatible name
-     */
-    ChartRequestHandler(ChartSet *set, TokenHandler *tk)
+    // Mantiene la signatura original, pero no usamos TokenHandler
+    ChartRequestHandler(ChartSet* set, TokenHandler* tk /*unused*/)
     {
+        (void)tk;
         this->set = set;
         this->name = set->GetKey();
-        this->tokenHandler = tk;
-        urlPrefix = URL_PREFIX + name + wxT("/");
-        this->info = set->info;
+        this->urlPrefix = URL_PREFIX + name + wxT("/");
     }
-    virtual HTTPResponse *HandleRequest(HTTPRequest *request)
+
+    // ÚNICO endpoint: /charts/<set>/featureInfo?z&x&y&lat&lon&tolerance
+    virtual HTTPResponse* HandleRequest(HTTPRequest* request)
     {
-        if (!set->IsActive())
-        {
+        if (!set || !set->IsActive())
             return new HTTPResponse();
-        }
-        long start = Logger::MicroSeconds100();
-        wxString url = request->url.Mid(urlPrefix.Length());
-        url.Replace("//", "/");
-        if (url.StartsWith("/"))
-        {
-            url = url.AfterFirst('/');
-        }
-        if (url.StartsWith(avnavXml))
-        {
-            // get chart overview
-            return handleOverviewRequest(request);
-        }
-        if (url.StartsWith("sequence"))
-        {
-            return handleSequenceRequest();
-        }
-        if (url.StartsWith("eula"))
-        {
-            return handleEulaRequest(request);
-        }
-        DecryptResult res;
-        if (url.StartsWith("encrypted/"))
-        {
-            LOG_INFO(_T("Encrypted URL: %s"), url);
-            wxString encrypted = url.AfterFirst('/').BeforeFirst('?');
-            res = tokenHandler->DecryptUrl(encrypted);
-            if (res.url == wxEmptyString)
-            {
-                LOG_DEBUG(_T("unable to decrypt url %s"), encrypted);
-                return new HTTPResponse();
-            }
-            url = res.url;
-            LOG_INFO(_T("Encrypted->Decrypted URL: %s"), url);
-        }
-        else
-        {
-            // return new HTTPResponse();
-            // fallback: allow access to unencrypted URLs
-            LOG_INFO(_T("Direct URL: %s"), url);
-        }
-        TileInfo tile(url, name);
-        if (!tile.valid)
-        {
-            LOG_ERROR(_T("invalid url %s"), url);
-            return new HTTPResponse();
-        }
-        if (res.sessionId != wxEmptyString)
-        {
-            set->LastRequest(res.sessionId, tile);
-        }
-        NameValueMap::iterator it;
-        NameValueMap *query = &(request->query);
-        it = query->find("featureInfo");
-        if (it == query->end())
-        {
-            CacheEntry *ce = NULL;
-            Renderer::RenderResult rt = Renderer::Instance()->renderTile(set, tile, ce);
-            if (rt != Renderer::RENDER_OK)
-                return new HTTPResponse();
-            // the Cache entry is now owned by the response
-            // and will be unrefed there
-            HTTPResponse *response = new HTTPBufferResponse("image/png", ce);
-            long timeSave = Logger::MicroSeconds100();
-            LOG_DEBUG(_T("http render: all=%ld"),
-                      (timeSave - start) * 100);
-            return response;
-        }
-        LOG_INFO(_T("Getting feature info for: %s"), url);
-        double lat, lon, tolerance;
-        int api = 0;
-        it = query->find("lat");
-        if (it == query->end())
-            return new HTTPJsonErrorResponse("missing lat");
-        lat = atof(it->second);
-        it = query->find("lon");
-        if (it == query->end())
-            return new HTTPJsonErrorResponse("missing lon");
-        lon = atof(it->second);
-        it = query->find("tolerance");
-        if (it == query->end())
-            return new HTTPJsonErrorResponse("missing tolerance");
-        tolerance = atof(it->second);
 
-        it = query->find("api");
-        if (it == query->end())
-        {
-            LOG_INFO("Is not api call");
-        }
-        else
-        {
-            LOG_INFO("Found API flag");
-            api = atoi(it->second);
+        // --- Logs de diagnóstico ---
+        LOG_INFO(_T("HandleRequest url='%s' urlPrefix='%s'"), request->url, urlPrefix);
+
+        // Localiza la parte tras /charts/<set>/ (robusto ante prefijos)
+        wxString full = request->url;
+        int pos = full.Find(urlPrefix);
+        wxString rest = (pos != wxNOT_FOUND) ? full.Mid(pos + urlPrefix.Length())
+                                             : full.Mid(urlPrefix.Length());
+
+        rest.Replace("//", "/");
+        if (rest.StartsWith("/")) rest = rest.AfterFirst('/');
+
+        wxString noQuery = rest.BeforeFirst('?');
+        wxString firstSeg = noQuery.BeforeFirst('/');
+        LOG_INFO(_T("Parsed rest='%s' noQuery='%s' firstSeg='%s'"), rest, noQuery, firstSeg);
+
+        // Acepta 'featureInfo' (tolerante a 'featureInfo/' al mirar el primer segmento)
+        if (!firstSeg.StartsWith(wxT("featureInfo"))) {
+            return new HTTPJsonErrorResponse("unsupported endpoint (use /featureInfo)");
         }
 
-        LOG_INFO(_T("Is API call: %d"), api);
+        // --------- Parámetros obligatorios ---------
+        NameValueMap* query = &(request->query);
 
-        LOG_INFO(_T("Got all data for feature info. LAT=%.4f LON=%.4f TOLERANCE=%.4f"), lat, lon, tolerance);
+        auto itZ  = query->find("z");         if (itZ  == query->end())  return new HTTPJsonErrorResponse("missing z");
+        auto itX  = query->find("x");         if (itX  == query->end())  return new HTTPJsonErrorResponse("missing x");
+        auto itY  = query->find("y");         if (itY  == query->end())  return new HTTPJsonErrorResponse("missing y");
+        auto itLat = query->find("lat");      if (itLat == query->end()) return new HTTPJsonErrorResponse("missing lat");
+        auto itLon = query->find("lon");      if (itLon == query->end()) return new HTTPJsonErrorResponse("missing lon");
+        auto itTol = query->find("tolerance");if (itTol == query->end()) return new HTTPJsonErrorResponse("missing tolerance");
 
-        wxString result;
+        // Parseo
+        int z  = atoi(itZ->second);
+        int x  = atoi(itX->second);
+        int y  = atoi(itY->second);
+        double lat = atof(itLat->second);
+        double lon = atof(itLon->second);
+        double tolerance = atof(itTol->second);
 
-        if (api == 1)
-        {
-            result = Renderer::Instance()->FeatureRequestApi(set, tile, lat, lon, tolerance);
+
+
+        // Fabricar URL clásica "z/x/y.png" para TileInfo
+        wxString tileUrl = wxString::Format(wxT("%d/%d/%d.png"), z, x, y);
+        TileInfo tile(tileUrl, name);
+        if (!tile.valid) {
+            LOG_ERROR(_T("Invalid TileInfo for url=%s"), tileUrl);
+            return new HTTPJsonErrorResponse("invalid tile coordinates");
         }
-        else
-        {
-            result = Renderer::Instance()->FeatureRequest(set, tile, lat, lon, tolerance);
-        }
-        HTTPResponse *rt = new HTTPStringResponse("application/json",
-                                                  wxString::Format(
-                                                      "{" JSON_SV(status, OK) "," JSON_IV(data, % s) "}",
-                                                      result));
 
+        LOG_INFO(_T("FeatureInfo request: set=%s z=%d x=%d y=%d lat=%.6f lon=%.6f tol=%.6f"),
+                 name, z, x, y, lat, lon, tolerance);
+
+        // Llamada API (única ruta soportada)
+        wxString result = Renderer::Instance()->FeatureRequestApi(set, tile, lat, lon, tolerance);
+
+        // Respuesta JSON { status: "OK", data: <json-string> }
+        HTTPResponse* rt = new HTTPStringResponse(
+            "application/json",
+            wxString::Format("{" JSON_SV(status, OK) "," JSON_IV(data, %s) "}", result));
         rt->responseHeaders["Access-Control-Allow-Origin"] = "*";
         return rt;
     }
+
+    // Patrón de URL: comodín bajo /charts/<set>/..., filtramos dentro
     virtual wxString GetUrlPattern()
     {
         return urlPrefix + wxT("*");

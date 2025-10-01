@@ -40,6 +40,7 @@
 #include <wx/dir.h>
 #include <wx/fileconf.h>
 #include <wx/stdpaths.h>
+#include <wx/tokenzr.h>
 #include <sys/types.h>
 #include <signal.h>
 #include <vector>
