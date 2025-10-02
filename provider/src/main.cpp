@@ -62,16 +62,16 @@
 #include "ChartRequestHandler.h"
 #include "ListRequestHandler.h"
 #include "ChartManager.h"
-#include "TokenRequestHandler.h"
-#include "StatusRequestHandler.h"
 #include "CacheFiller.h"
 #include "MD5.h"
 #include "SystemHelper.h"
 #include "StatusCollector.h"
-#include "StaticRequestHandler.h"
+// #include "TokenRequestHandler.h"
+// #include "StatusRequestHandler.h"
+// #include "StaticRequestHandler.h"
+// #include "UploadRequestHandler.h"
+// #include "SettingsRequestHandler.h"
 #include "SettingsManager.h"
-#include "SettingsRequestHandler.h"
-#include "UploadRequestHandler.h"
 #include "ColorTable.h"
 #include "S57AttributeDecoder.h"
 #include "TestHelper.h"
@@ -208,15 +208,14 @@ public:
             //     wxMilliSleep(1000);
             // }
 
-
             LOG_INFO(wxT("no parent process, waiting for SIGINT (Ctrl+C)"));
             wxPrintf(wxT("no parent process, waiting for SIGINT (Ctrl+C)\n"));
-        
+
             sigset_t mask;
             sigemptyset(&mask);
             sigaddset(&mask, SIGINT);
             int sig;
-            sigwait(&mask, &sig);  // waits here until SIGINT
+            sigwait(&mask, &sig); // waits here until SIGINT
         }
         queue->Stop();
     }
@@ -390,6 +389,20 @@ private:
             rt.Append("]\n}\n");
             return rt;
         }
+    };
+
+    class FPRFileProvider
+    {
+    public:
+        class Result
+        {
+        public:
+            bool status = false;
+            wxString fileName = wxEmptyString;
+            wxString error = wxEmptyString;
+            bool hasError = false;
+        };
+        virtual Result createFile(bool forDongle = false) = 0;
     };
 
     class FPRFileProviderImpl : public FPRFileProvider
@@ -649,34 +662,29 @@ private:
                 }
             }
         }
-        wxArrayString uploadChartList;
-        // read one level below uploadDir
-        wxDir dir(uploadDir);
-        if (!dir.IsOpened())
+        wxArrayString uploadChartList; // Lo creamos pero ignoramos luego
+        // // read one level below uploadDir
         {
-            LOG_ERROR(_T("unable to read upload directory %s"), uploadDir);
-        }
-        else
-        {
-            wxString fileName;
-            bool hasNext = dir.GetFirst(&fileName);
-            LOG_INFO(_T("trying filenames in chart directory: %s"), uploadDir);
-            while (hasNext)
+            wxDir dir(uploadDir);
+            if (!dir.IsOpened())
             {
-                wxString localFile(dir.GetName() + wxFileName::GetPathSeparator() + fileName);
-                if (!fileName.StartsWith(UPLOAD_TEMP_DIR))
+                LOG_ERROR(_T("unable to read upload directory %s"), uploadDir);
+            }
+            else
+            {
+                wxString fileName;
+                bool hasNext = dir.GetFirst(&fileName);
+                LOG_INFO(_T("scanning chart directory: %s"), uploadDir);
+                while (hasNext)
                 {
-                    if (wxDirExists(localFile))
+                    wxString localPath = dir.GetName() + wxFileName::GetPathSeparator() + fileName;
+                    if (wxDirExists(localPath))
                     {
-                        uploadChartList.Add(localFile);
+                        uploadChartList.Add(localPath);
+                        LOG_INFO(_T("found chart candidate dir: %s"), localPath);
                     }
+                    hasNext = dir.GetNext(&fileName);
                 }
-                else
-                {
-                    LOG_INFO(wxT("Removing temp chart dir %s"), localFile);
-                    wxFileName::Rmdir(localFile, wxPATH_RMDIR_FULL | wxPATH_RMDIR_RECURSIVE);
-                }
-                hasNext = dir.GetNext(&fileName);
             }
         }
         chartManager = new ChartManager(&settings, &extensions);
@@ -756,12 +764,13 @@ private:
         HTTPServer webServer(port, maxThreads);
         webServer.AddHandler(new ListRequestHandler(chartManager));
         wxFileName appFile = (wxStandardPaths::Get().GetExecutablePath());
-        TokenRequestHandler *tokenRequestHandler = new TokenRequestHandler(appFile.GetPath(), tokenHandler);
-        tokenHandler->start();
-        webServer.AddHandler(tokenRequestHandler);
-        webServer.AddHandler(new StaticRequestHandler(appFile.GetPath() + wxFileName::GetPathSeparators() + wxT("gui")));
-        webServer.AddHandler(new StatusRequestHandler(&statusCollector));
-        webServer.AddHandler(new UploadRequestHandler(chartManager, &mainQueue, uploadDir));
+        // TokenRequestHandler *tokenRequestHandler = new TokenRequestHandler(appFile.GetPath(), tokenHandler);
+        // tokenHandler->start();
+        // webServer.AddHandler(tokenRequestHandler);
+        // webServer.AddHandler(new StaticRequestHandler(appFile.GetPath() + wxFileName::GetPathSeparators() + wxT("gui")));
+        // webServer.AddHandler(new StatusRequestHandler(&statusCollector));
+        // webServer.AddHandler(new UploadRequestHandler(chartManager, &mainQueue, uploadDir));
+
         manager = new PlugInManager();
         FPRFileProviderImpl fprProvider;
         LOG_INFO(_T("Loading OCPN plugins from :%s"), pluginDir);
@@ -824,7 +833,7 @@ private:
         {
             LOG_ERRORC("no chart handlers loaded, exiting");
         }
-        webServer.AddHandler(new SettingsRequestHandler(chartManager, &mainQueue, &fprProvider));
+        // webServer.AddHandler(new SettingsRequestHandler(chartManager, &mainQueue, &fprProvider));
         if (!webServer.Start())
         {
             LOG_ERRORC(_T("unable to start server at port %d"), port);
@@ -939,7 +948,7 @@ private:
         for (setIter = chartSets->begin(); setIter != chartSets->end(); setIter++)
         {
             LOG_INFO(wxT("creating handler for chart set %s"), setIter->second->info.dirname);
-            webServer.AddHandler(new ChartRequestHandler(setIter->second, tokenHandler));
+            webServer.AddHandler(new ChartRequestHandler(setIter->second, nullptr));
         }
 
         chartManager->StartFiller(fileCacheSize * 60 / 100, maxPrefillZoom);
@@ -950,8 +959,8 @@ private:
         // waiter.stop();
         // waiter.join();
         wxMilliSleep(100);
-        tokenHandler->stop();
-        tokenHandler->join();
+        // tokenHandler->stop();
+        // tokenHandler->join();
         webServer.Stop();
         chartManager->Stop();
         shutdownPlugins();
