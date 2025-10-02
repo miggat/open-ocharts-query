@@ -31,7 +31,8 @@
 #include <setjmp.h>
 #endif
 
-#include <wx/wx.h>
+// #include <wx/wx.h>
+#include <wx/app.h>
 #include <wx/wfstream.h>
 #include <wx/filename.h>
 #include <wx/cmdline.h>
@@ -224,7 +225,7 @@ public:
 #define VAL(v) #v
 #define TOSTRING(str) VAL(str)
 
-class AvNavProvider : public wxApp
+class AvNavProvider : public wxAppConsole
 {
 private:
     wxArrayString myArgs;
@@ -248,28 +249,32 @@ private:
     wxString exePath = wxT("/usr/bin");
     wxString openCPNConfig = wxEmptyString; // if set - pare this opencpn config for charts
 public:
-    virtual int MainLoop()
+    virtual int OnRun() override
     {
         // ignore sigpipes
         signal(SIGPIPE, SIG_IGN);
         signal(SIGUSR1, ignoreSig);
         setpgid(0, 0);
-        wxInitAllImageHandlers();
+
+        // NO llames a wxInitAllImageHandlers() en modo console
+        // wxInitAllImageHandlers();
+
         Logger::CreateInstance(logFile, maxLogLines);
         Logger::instance()->SetLevel((int)debugLevel);
-        SystemLogger *logger = new SystemLogger();
+        SystemLogger* logger = new SystemLogger();
         logger->SetFormatter(new SystemLogFormatter());
         delete wxLog::SetActiveTarget(logger);
         wxLog::SetLogLevel(wxLOG_Max); // we decide in our logger
+
         wxString msg = wxString::Format(wxT("%s starting with parameters "), argv[0]);
-        for (int i = 0; i < argc; i++)
-        {
+        for (int i = 0; i < argc; i++) {
             msg.Append(argv[i]);
             msg.Append(" ");
         }
         wxPrintf(_T("%s\n"), msg);
         LOG_INFO(msg);
         LOG_INFO("Version=%s", TOSTRING(AVNAV_VERSION));
+
         return run(myArgs);
     }
 
@@ -955,7 +960,7 @@ private:
         Thread waiter(new StopHandler(&webServer, parentPid, &mainQueue));
         waiter.start();
         waiter.detach();
-        mainQueue.Loop(this);
+        mainQueue.Loop((wxApp*)nullptr);
         // waiter.stop();
         // waiter.join();
         wxMilliSleep(100);
@@ -969,7 +974,8 @@ private:
         return 0;
     }
 };
-wxIMPLEMENT_APP(AvNavProvider);
+
+wxIMPLEMENT_APP_CONSOLE(AvNavProvider);
 
 // trigger the linking of libGLU
 extern "C" int dummy(void)
