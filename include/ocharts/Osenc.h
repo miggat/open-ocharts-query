@@ -26,22 +26,15 @@
 #ifndef OSENC_H
 #define OSENC_H
 
-// For compilers that support precompilation, includes "wx.h".
-//#include "wx/wxprec.h"
 
-#include <wx/filename.h>
-#include <wx/wfstream.h>
-
-// #ifndef  WX_PRECOMP
-//   #include "wx/wx.h"
-// #endif //precompiled headers
+#include "OsencStubs.h"
 
 #include "s52s57.h"
 #include "ogr_s57.h"
 #include "cpl_csv.h"
-//#include "chartbase.h"
 
-#include "s57RegistrarMgr.h"
+
+// #include "s57RegistrarMgr.h"
 
 #include <string.h>
 #include <stdint.h>
@@ -573,8 +566,8 @@ private:
     std::string GetFeatureAcronymFromTypecode( int typeCode );
     std::string GetAttributeAcronymFromTypecode( int typeCode );
 
-    PolyTessGeo *BuildPolyTessGeo(_OSENC_AreaGeometry_Record_Payload *record, unsigned char **bytes_consumed );
-    PolyTessGeo *BuildPolyTessGeoF16(_OSENC_AreaGeometryExt_Record_Payload *record, unsigned char **next_byte );
+    // PolyTessGeo *BuildPolyTessGeo(_OSENC_AreaGeometry_Record_Payload *record, unsigned char **bytes_consumed );
+    // PolyTessGeo *BuildPolyTessGeoF16(_OSENC_AreaGeometryExt_Record_Payload *record, unsigned char **next_byte );
 
     LineGeometryDescriptor *BuildLineGeometry( _OSENC_LineGeometry_Record_Payload *pPayload );
 

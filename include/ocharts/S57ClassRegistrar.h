@@ -25,6 +25,9 @@
 #ifndef __S57CLASSREGISTRAR_H__
 #define __S57CLASSREGISTRAR_H__
 
+#include <cstddef>   // NULL / size_t (aunque usaremos nullptr)
+#include <cstdio>    // FILE
+
 class S57ClassRegistrar
 {
     // Class information:

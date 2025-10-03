@@ -23,15 +23,8 @@
  *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301,  USA.         *
  **************************************************************************/
 
-// For compilers that support precompilation, includes "wx.h".
-//#include "wx/wxprec.h"
 
-
-// #ifndef  WX_PRECOMP
-//   #include "wx/wx.h"
-// #endif //precompiled headers
-
-#include <wx/log.h>
+ 
 #include <wx/wfstream.h>
 #include <wx/filename.h>
 
@@ -47,8 +40,7 @@
 
 #include "mygeom.h"
 #include "georef.h"
-//#include "ocpn_plugin.h"
-#include "ocpn_plugin_shim.h"
+// #include "ocpn_plugin.h"
 
 extern int g_debugLevel;
 extern wxString g_pipeParm;
@@ -62,289 +54,6 @@ WX_DEFINE_ARRAY( float*, MyFloatPtrArray );
 void OpenCPN_OGRErrorHandler( CPLErr eErrClass, int nError,
                               const char * pszErrorMsg );               // installed GDAL OGR library error handler
 
-
-#ifdef __OCPN__ANDROID__
-#include "qdebug.h"
-
-//--------------------------------------------------------------------------
-//      Osenc_instream implementation as Kernel Socket
-//--------------------------------------------------------------------------
-
-int makeAddr(const char* name, struct sockaddr_un* pAddr, socklen_t* pSockLen)
-{
-    // consider this:
-    //http://stackoverflow.com/questions/11640826/can-not-connect-to-linux-abstract-unix-socket
-
-    int nameLen = strlen(name);
-    if (nameLen >= (int) sizeof(pAddr->sun_path) -1)  /* too long? */
-        return -1;
-    pAddr->sun_path[0] = '\0';  /* abstract namespace */
-    strcpy(pAddr->sun_path+1, name);
-    pAddr->sun_family = AF_LOCAL;
-    *pSockLen = 1 + nameLen + offsetof(struct sockaddr_un, sun_path);
-    return 0;
-}
-
-Osenc_instream::Osenc_instream()
-{
-    Init();
-}
-
-Osenc_instream::~Osenc_instream()
-{
-    Close();
-    if(publicSocket > 0){
-       // qDebug() << "dtor Close Socket" << publicSocket;
-        close( publicSocket );
-        publicSocket = -1;
-    }
-
-}
-
-void Osenc_instream::Init()
-{
-    privatefifo = -1;
-    publicfifo = -1;
-    m_OK = true;
-    m_lastBytesRead = 0;
-    m_lastBytesReq = 0;
-    m_uncrypt_stream = 0;
-    publicSocket = -1;
-
-    strcpy(publicsocket_name,"com.opencpn.ocharts_pi");
-
-    //qDebug() << "publicsocket_name: " << publicsocket_name;
-
-    if (makeAddr(publicsocket_name, &sockAddr, &sockLen) < 0){
-        wxLogMessage(_T("oesenc_pi: Could not makeAddr for PUBLIC socket"));
-    }
-
-    publicSocket = socket(AF_LOCAL, SOCK_STREAM, PF_UNIX);
-    if (publicSocket < 0) {
-        wxLogMessage(_T("oesenc_pi: Could not make PUBLIC socket"));
-    }
-    //else
-      //  qDebug() << "Init() create Socket" << publicSocket;
-
-
-}
-
-void Osenc_instream::ReInit()
-{
-    privatefifo = -1;
-    publicfifo = -1;
-    m_OK = true;
-    m_lastBytesRead = 0;
-    m_lastBytesReq = 0;
-    m_uncrypt_stream = 0;
-    publicSocket = -1;
-
-    strcpy(publicsocket_name,"com.opencpn.ocharts_pi");
-
-    if (makeAddr(publicsocket_name, &sockAddr, &sockLen) < 0){
-        wxLogMessage(_T("o-charts_pi: Could not makeAddr for PUBLIC socket"));
-    }
-
-    publicSocket = socket(AF_LOCAL, SOCK_STREAM, PF_UNIX);
-    if (publicSocket < 0) {
-        wxLogMessage(_T("o-charts_pi: Could not make PUBLIC socket"));
-    }
-    //else
-        //qDebug() << "ReInit() create Socket" << publicSocket;
-
-
-}
-
-void Osenc_instream::Close()
-{
-    //wxLogMessage(_T("Osenc_instream::Close()"));
-
-    if(-1 != privatefifo){
-        if(g_debugLevel)printf("   Close private fifo: %s \n", privatefifo_name);
-        close(privatefifo);
-        if(g_debugLevel)printf("   unlink private fifo: %s \n", privatefifo_name);
-        unlink(privatefifo_name);
-    }
-
-    if(-1 != publicfifo)
-        close(publicfifo);
-
-    if(m_uncrypt_stream){
-        delete m_uncrypt_stream;
-    }
-
-    if(-1 != publicSocket){
-        //qDebug() << "Close() Close Socket" << publicSocket;
-        close( publicSocket );
-        publicSocket = -1;
-    }
-
-    ReInit();             // In case it want to be used again
-}
-
-
-bool Osenc_instream::isAvailable( wxString user_key )
-{
-    if(g_debugLevel)printf("TestAvail\n");
-
-    if(m_uncrypt_stream){
-        return m_uncrypt_stream->IsOk();
-    }
-    else{
-        if( Open(CMD_TEST_AVAIL, _T(""), user_key) ){
-            if(g_debugLevel)printf("TestAvail Open OK\n");
-            char response[8];
-            memset( response, 0, 8);
-            int nTry = 5;
-            do{
-                if( Read(response, 2).IsOk() ){
-                    if(g_debugLevel)printf("TestAvail Response OK\n");
-                    return( !strncmp(response, "OK", 2) );
-                }
-
-                if(g_debugLevel)printf("Sleep on TestAvail: %d\n", nTry);
-                wxMilliSleep(100);
-                nTry--;
-            }while(nTry);
-
-            return false;
-        }
-        else{
-            if(g_debugLevel)printf("TestAvail Open Error\n");
-            return false;
-        }
-    }
-
-}
-
-void Osenc_instream::Shutdown()
-{
-    //     if(!m_uncrypt_stream){
-        //         Open(CMD_EXIT,  _T(""), _T("")) ;
-        //         char response[8];
-        //         memset( response, 0, 8);
-        //         Read(response, 3);
-        //     }
-
-        if(Open(CMD_EXIT,  _T(""), _T("?"))) {
-            char response[8];
-            memset( response, 0, 8);
-            Read(response, 3);
-        }
-}
-
-
-bool Osenc_instream::Open( unsigned char cmd, wxString senc_file_name, wxString crypto_key )
-{
-    if(crypto_key.Length()){
-        fifo_msg msg;
-
-
-        if (connect(publicSocket, (const struct sockaddr*) &sockAddr, sockLen) < 0) {
-            wxLogMessage(_T("o-charts_pi: Could not connect to PUBLIC socket"));
-            return false;
-        }
-
-        wxCharBuffer buf = senc_file_name.ToUTF8();
-        if(buf.data())
-            strncpy(msg.senc_name, buf.data(), sizeof(msg.senc_name));
-
-        buf = crypto_key.ToUTF8();
-        if(buf.data())
-            strncpy(msg.senc_key, buf.data(), sizeof(msg.senc_key));
-
-        msg.cmd = cmd;
-
-        write(publicSocket, (char*) &msg, sizeof(msg));
-
-        return true;
-    }
-    else{                        // not encrypted
-        m_uncrypt_stream = new wxFileInputStream(senc_file_name);
-        return m_uncrypt_stream->IsOk();
-    }
-}
-
-Osenc_instream &Osenc_instream::Read(void *buffer, size_t size)
-{
-    #define READ_SIZE 64000;
-    #define MAX_TRIES 100;
-    int timeout_msec = 100;
-#ifdef __OCPN__ANDROID__
-    timeout_msec = 1000;                // Longer for Android
-#endif
-
-    if(!m_uncrypt_stream){
-        size_t max_read = READ_SIZE;
-        //    bool blk = fcntl(privatefifo, F_GETFL) & O_NONBLOCK;
-
-        if( -1 != publicSocket){
-
-            int remains = size;
-            char *bufRun = (char *)buffer;
-            int totalBytesRead = 0;
-            int nLoop = MAX_TRIES;
-            do{
-                int bytes_to_read = MIN(remains, max_read);
-                int bytesRead;
-
-                struct pollfd fd;
-                int ret;
-
-                fd.fd = publicSocket; // your socket handler
-                fd.events = POLLIN;
-                ret = poll(&fd, 1, timeout_msec); // nominal 100 msec timeout, except for Android.
-                switch (ret) {
-                    case -1:
-                        // Error
-                        bytesRead = 0;
-                        break;
-                    case 0:
-                        // Timeout
-                        bytesRead = -1;
-                        break;
-                    default:
-                        bytesRead = read(publicSocket, bufRun, bytes_to_read );
-                        break;
-                }
-
-                // Server may not have opened the Write end of the FIFO yet
-                //  This is also the path for normal EOF condition from the server
-                if(bytesRead == 0){
-                    nLoop --;
-                    wxMilliSleep(1);
-                }
-                else if(bytesRead == -1)
-                    nLoop = 0;
-                else
-                    nLoop = MAX_TRIES;
-
-                remains -= bytesRead;
-                bufRun += bytesRead;
-                totalBytesRead += bytesRead;
-            } while( (remains > 0) && (nLoop) );
-
-            m_OK = (totalBytesRead == size);
-            m_lastBytesRead = totalBytesRead;
-            m_lastBytesReq = size;
-        }
-
-        return *this;
-    }
-    else{
-        if(m_uncrypt_stream->IsOk())
-            m_uncrypt_stream->Read(buffer, size);
-        m_OK = m_uncrypt_stream->IsOk();
-        return *this;
-    }
-}
-
-bool Osenc_instream::IsOk()
-{
-    return m_OK;
-}
-
-#endif
 
 #if !defined(__WXMSW__) && !defined( __OCPN__ANDROID__)   // i.e. linux and Mac
 //--------------------------------------------------------------------------
@@ -557,286 +266,6 @@ bool Osenc_instream::IsOk()
     return m_OK;
 }
 
-#elif defined(__WXMSW__)  //MSW
-
-#include <windows.h>
-#include <stdio.h>
-#include <conio.h>
-#include <tchar.h>
-
-#define BUFSIZE 1024
-
-Osenc_instream::Osenc_instream()
-{
-    Init();
-}
-
-Osenc_instream::~Osenc_instream()
-{
-    Close();
-}
-
-void Osenc_instream::Init()
-{
-    hPipe = (HANDLE)-1;
-    m_OK = true;
-    m_lastBytesRead = 0;
-    m_lastBytesReq = 0;
-}
-
-
-void Osenc_instream::Close()
-{
-    if((HANDLE)-1 != hPipe)
-        CloseHandle(hPipe);
-
-    Init();             // In case it wants to be reused....
-}
-
-
-bool Osenc_instream::isAvailable( wxString user_key )
-{
-    if( Open(CMD_TEST_AVAIL, _T(""), user_key ) ){
-        char response[8];
-        memset( response, 0, 8);
-        int nTry = 5;
-        do{
-            if( Read(response, 3).IsOk() ){
-                if(strncmp(response, "OK", 2))
-                    return false;
-
-                if(response[2] == '1')
-                    wxLogMessage(_T("Osenc_instream decrypt T"));
-                else if(response[2] == '2')
-                    wxLogMessage(_T("Osenc_instream decrypt S"));
-                else if(response[2] == '3')
-                    wxLogMessage(_T("Osenc_instream decrypt L"));
-                else
-                    wxLogMessage(_T("Osenc_instream decrypt ?"));
-
-                return true;
-            }
-
-            wxMilliSleep(100);
-            nTry--;
-        }while(nTry);
-
-        return false;
-    }
-    else{
-        if(g_debugLevel) wxLogMessage(_T("Osenc_instream OPEN() failed"));
-        return false;
-    }
-
-}
-
-void Osenc_instream::Shutdown()
-{
-    Open(CMD_EXIT,  _T(""), _T("")) ;
-    char response[8];
-    memset( response, 0, 8);
-    Read(response, 3);
-
-}
-
-bool Osenc_instream::Open( unsigned char cmd, wxString senc_file_name, wxString crypto_key )
-{
-    fifo_msg msg;
-
-    LPTSTR lpvMessage=TEXT("Default message from client.");
-    BOOL   fSuccess = FALSE;
-    DWORD  cbToWrite, cbWritten;
-
-    wxString pipeName;
-    if(g_pipeParm.Length())
-        pipeName = _T("\\\\.\\pipe\\") + g_pipeParm;
-    else
-        pipeName = _T("\\\\.\\pipe\\mynamedpipe");
-
-    LPCWSTR lpszPipename = pipeName.wc_str();
-
-    // Try to open a named pipe; wait for it, if necessary.
-
-    while (1)
-    {
-            hPipe = CreateFile(
-            lpszPipename,   // pipe name
-            GENERIC_READ |  // read and write access
-            GENERIC_WRITE,
-            0,              // no sharing
-            NULL,           // default security attributes
-            OPEN_EXISTING,  // opens existing pipe
-            0,              // default attributes
-            NULL);          // no template file
-
-            // Break if the pipe handle is valid.
-
-            if (hPipe != INVALID_HANDLE_VALUE)
-                break;
-
-            // Exit if an error other than ERROR_PIPE_BUSY occurs.
-
-            if (GetLastError() != ERROR_PIPE_BUSY)
-            {
-                    _tprintf( TEXT("Could not open pipe. GLE=%d\n"), GetLastError() );
-                    return false;
-            }
-
-                // All pipe instances are busy, so wait for 20 seconds.
-
-            if ( ! WaitNamedPipe(lpszPipename, 20000))
-            {
-                    printf("Could not open pipe: 20 second wait timed out.");
-                    return false;
-            }
-    }
-
-#if 0
-    // The pipe connected; change to message-read mode.
-
-    dwMode = PIPE_READMODE_MESSAGE;
-    fSuccess = SetNamedPipeHandleState(
-    hPipe,    // pipe handle
-    &dwMode,  // new pipe mode
-    NULL,     // don't set maximum bytes
-    NULL);    // don't set maximum time
-    if ( ! fSuccess)
-    {
-        _tprintf( TEXT("SetNamedPipeHandleState failed. GLE=%d\n"), GetLastError() );
-        return -1;
-    }
-#endif
-
-    // Create a command message
-
-    wxCharBuffer buf = senc_file_name.ToUTF8();
-    if(buf.data())
-        strncpy(msg.senc_name, buf.data(), sizeof(msg.senc_name));
-
-    buf = crypto_key.ToUTF8();
-    if(buf.data())
-        strncpy(msg.senc_key, buf.data(), sizeof(msg.senc_key));
-
-    msg.cmd = cmd;
-
-    // Send the command message to the pipe server.
-
-    cbToWrite = sizeof(msg);
-    _tprintf( TEXT("Sending %d byte message \n"), cbToWrite);
-
-    fSuccess = WriteFile(
-        hPipe,                  // pipe handle
-        &msg,                   // message
-        cbToWrite,              // message length
-        &cbWritten,             // bytes written
-        NULL);                  // not overlapped
-
-    if ( ! fSuccess)
-    {
-        _tprintf( TEXT("WriteFile to pipe failed. GLE=%d\n"), GetLastError() );
-        return false;
-    }
-
-    printf("\nMessage sent to server.\n");
-
-
-
-#if 0
-
-
-
-    // Create a unique name for the private (i.e. data) pipe, valid for this session
-    sprintf(privatefifo_name, "/tmp/fifo%d",44);
-
-    // Create the private FIFO
-    //     if( mkfifo(privatefifo_name, 0666) < 0 )
-    //         return false;
-    mkfifo(privatefifo_name, 0666);
-
-    // Open the well known public FIFO for writing
-    if( (publicfifo = open(PUBLIC, O_WRONLY | O_NDELAY) ) == -1) {
-        return false;
-        //if( errno == ENXIO )
-    }
-
-    //  Send the command over the public pipe
-    strncpy(msg.fifo_name, privatefifo_name, sizeof(privatefifo_name));
-
-    wxCharBuffer buf = senc_file_name.ToUTF8();
-    if(buf.data())
-        strncpy(msg.senc_name, buf.data(), sizeof(msg.senc_name));
-
-    buf = crypto_key.ToUTF8();
-    if(buf.data())
-        strncpy(msg.senc_key, buf.data(), sizeof(msg.senc_key));
-
-
-    write(publicfifo, (char*) &msg, sizeof(msg));
-
-    // Open the private FIFO for reading to get output of command
-    // from the server.
-    if((privatefifo = open(privatefifo_name, O_RDONLY) ) == -1) {
-        return false;
-    }
-
-#endif
-    return true;
-}
-
-Osenc_instream &Osenc_instream::Read(void *buffer, size_t size)
-{
-    #define READ_SIZE 64000;
-    size_t max_read = READ_SIZE;
-
-    if( (HANDLE)-1 != hPipe){
-        size_t remains = size;
-        char *bufRun = (char *)buffer;
-        int totalBytesRead = 0;
-        DWORD bytesRead;
-        BOOL fSuccess = FALSE;
-
-        do{
-            int bytes_to_read = MIN(remains, max_read);
-
-            // Read from the pipe.
-
-            fSuccess = ReadFile(
-                hPipe,                  // pipe handle
-                bufRun,                 // buffer to receive reply
-                bytes_to_read,          // size of buffer
-                &bytesRead,             // number of bytes read
-                NULL);                  // not overlapped
-
-            if ( ! fSuccess && GetLastError() != ERROR_MORE_DATA )
-                break;
-
-            //_tprintf( TEXT("\"%s\"\n"), chBuf );
-
-            if(bytesRead == 0){
-                remains = 0;    // break it
-            }
-
-            remains -= bytesRead;
-            bufRun += bytesRead;
-            totalBytesRead += bytesRead;
-        } while(remains > 0);
-
-
-        m_OK = (totalBytesRead == size) && fSuccess;
-        m_lastBytesRead = totalBytesRead;
-        m_lastBytesReq = size;
-
-    }
-    else
-        m_OK = false;
-
-    return *this;
-}
-
-bool Osenc_instream::IsOk()
-{
-    return m_OK;
-}
 
 #endif
 
@@ -1587,44 +1016,44 @@ int Osenc::ingest200(const wxString &senc_file_name,
 
             case FEATURE_GEOMETRY_RECORD_AREA:
             {
-                unsigned char *buf = getBuffer( record.record_length - sizeof(OSENC_Record_Base));
-                if(!fpx.Read(buf, record.record_length - sizeof(OSENC_Record_Base)).IsOk()){
-                    dun = 1; break;
-                }
+                // unsigned char *buf = getBuffer( record.record_length - sizeof(OSENC_Record_Base));
+                // if(!fpx.Read(buf, record.record_length - sizeof(OSENC_Record_Base)).IsOk()){
+                //     dun = 1; break;
+                // }
 
-                // Get the payload
-                _OSENC_AreaGeometry_Record_Payload *pPayload = (_OSENC_AreaGeometry_Record_Payload *)buf;
+                // // Get the payload
+                // _OSENC_AreaGeometry_Record_Payload *pPayload = (_OSENC_AreaGeometry_Record_Payload *)buf;
 
-                if(obj){
-                    unsigned char *next_byte;
-                    PolyTessGeo *pPTG = BuildPolyTessGeo( pPayload, &next_byte);
+                // if(obj){
+                //     unsigned char *next_byte;
+                //     PolyTessGeo *pPTG = BuildPolyTessGeo( pPayload, &next_byte);
 
-                    obj->SetAreaGeometry(pPTG, m_ref_lat, m_ref_lon ) ;
+                //     obj->SetAreaGeometry(pPTG, m_ref_lat, m_ref_lon ) ;
 
-                    //  Set the Line geometry for the Feature
-                    LineGeometryDescriptor *pDescriptor = (LineGeometryDescriptor *)malloc(sizeof(LineGeometryDescriptor));
+                //     //  Set the Line geometry for the Feature
+                //     LineGeometryDescriptor *pDescriptor = (LineGeometryDescriptor *)malloc(sizeof(LineGeometryDescriptor));
 
-                    //  Copy some simple stuff
-                    pDescriptor->extent_e_lon = pPayload->extent_e_lon;
-                    pDescriptor->extent_w_lon = pPayload->extent_w_lon;
-                    pDescriptor->extent_s_lat = pPayload->extent_s_lat;
-                    pDescriptor->extent_n_lat = pPayload->extent_n_lat;
+                //     //  Copy some simple stuff
+                //     pDescriptor->extent_e_lon = pPayload->extent_e_lon;
+                //     pDescriptor->extent_w_lon = pPayload->extent_w_lon;
+                //     pDescriptor->extent_s_lat = pPayload->extent_s_lat;
+                //     pDescriptor->extent_n_lat = pPayload->extent_n_lat;
 
-                    pDescriptor->indexCount = pPayload->edgeVector_count;
+                //     pDescriptor->indexCount = pPayload->edgeVector_count;
 
-                    // Copy the line index table, which in this case is offset in the payload
-                    int table_stride = 3;
-                    if(m_senc_file_read_version > 200)
-                        table_stride = 4;
+                //     // Copy the line index table, which in this case is offset in the payload
+                //     int table_stride = 3;
+                //     if(m_senc_file_read_version > 200)
+                //         table_stride = 4;
 
-                    pDescriptor->indexTable = (int *)malloc(pPayload->edgeVector_count * table_stride * sizeof(int));
-                    memcpy( pDescriptor->indexTable, next_byte, pPayload->edgeVector_count * table_stride * sizeof(int) );
+                //     pDescriptor->indexTable = (int *)malloc(pPayload->edgeVector_count * table_stride * sizeof(int));
+                //     memcpy( pDescriptor->indexTable, next_byte, pPayload->edgeVector_count * table_stride * sizeof(int) );
 
 
-                    obj->SetLineGeometry( pDescriptor, GEO_AREA, m_ref_lat, m_ref_lon ) ;
+                //     obj->SetLineGeometry( pDescriptor, GEO_AREA, m_ref_lat, m_ref_lon ) ;
 
-                    free( pDescriptor );
-                }
+                //     free( pDescriptor );
+                //}
 
                 break;
 
@@ -1632,45 +1061,45 @@ int Osenc::ingest200(const wxString &senc_file_name,
 
             case FEATURE_GEOMETRY_RECORD_AREA_EXT:
             {
-                unsigned char *buf = getBuffer( record.record_length - sizeof(OSENC_Record_Base));
-                if(!fpx.Read(buf, record.record_length - sizeof(OSENC_Record_Base)).IsOk()){
-                    dun = 1; break;
-                }
+                // unsigned char *buf = getBuffer( record.record_length - sizeof(OSENC_Record_Base));
+                // if(!fpx.Read(buf, record.record_length - sizeof(OSENC_Record_Base)).IsOk()){
+                //     dun = 1; break;
+                // }
 
-                // Get the payload
-                _OSENC_AreaGeometryExt_Record_Payload *pPayload = (_OSENC_AreaGeometryExt_Record_Payload *)buf;
+                // // Get the payload
+                // _OSENC_AreaGeometryExt_Record_Payload *pPayload = (_OSENC_AreaGeometryExt_Record_Payload *)buf;
 
-                if(obj){
-                    unsigned char *next_byte;
-                    PolyTessGeo *pPTG = BuildPolyTessGeoF16( pPayload, &next_byte);
+                // if(obj){
+                //     unsigned char *next_byte;
+                //     PolyTessGeo *pPTG = BuildPolyTessGeoF16( pPayload, &next_byte);
 
-                    obj->SetAreaGeometry(pPTG, m_ref_lat, m_ref_lon ) ;
+                //     obj->SetAreaGeometry(pPTG, m_ref_lat, m_ref_lon ) ;
 
-                    //  Set the Line geometry for the Feature
-                    LineGeometryDescriptor *pDescriptor = (LineGeometryDescriptor *)malloc(sizeof(LineGeometryDescriptor));
+                //     //  Set the Line geometry for the Feature
+                //     LineGeometryDescriptor *pDescriptor = (LineGeometryDescriptor *)malloc(sizeof(LineGeometryDescriptor));
 
-                    //  Copy some simple stuff
-                    pDescriptor->extent_e_lon = pPayload->extent_e_lon;
-                    pDescriptor->extent_w_lon = pPayload->extent_w_lon;
-                    pDescriptor->extent_s_lat = pPayload->extent_s_lat;
-                    pDescriptor->extent_n_lat = pPayload->extent_n_lat;
+                //     //  Copy some simple stuff
+                //     pDescriptor->extent_e_lon = pPayload->extent_e_lon;
+                //     pDescriptor->extent_w_lon = pPayload->extent_w_lon;
+                //     pDescriptor->extent_s_lat = pPayload->extent_s_lat;
+                //     pDescriptor->extent_n_lat = pPayload->extent_n_lat;
 
-                    pDescriptor->indexCount = pPayload->edgeVector_count;
+                //     pDescriptor->indexCount = pPayload->edgeVector_count;
 
-                    // Copy the line index table, which in this case is offset in the payload
-                    int table_stride = 3;
-                    if(m_senc_file_read_version > 200)
-                        table_stride = 4;
+                //     // Copy the line index table, which in this case is offset in the payload
+                //     int table_stride = 3;
+                //     if(m_senc_file_read_version > 200)
+                //         table_stride = 4;
 
-                    pDescriptor->indexTable = (int *)malloc(pPayload->edgeVector_count * table_stride * sizeof(int));
-                    memcpy( pDescriptor->indexTable, next_byte,
-                            pPayload->edgeVector_count * table_stride * sizeof(int) );
+                //     pDescriptor->indexTable = (int *)malloc(pPayload->edgeVector_count * table_stride * sizeof(int));
+                //     memcpy( pDescriptor->indexTable, next_byte,
+                //             pPayload->edgeVector_count * table_stride * sizeof(int) );
 
 
-                    obj->SetLineGeometry( pDescriptor, GEO_AREA, m_ref_lat, m_ref_lon ) ;
+                //     obj->SetLineGeometry( pDescriptor, GEO_AREA, m_ref_lat, m_ref_lon ) ;
 
-                    free( pDescriptor );
-                }
+                //     free( pDescriptor );
+                // }
 
                 break;
 
@@ -2770,302 +2199,302 @@ LineGeometryDescriptor *Osenc::BuildLineGeometry( _OSENC_LineGeometry_Record_Pay
 
 
 
-//      Build PolyGeo Object from OSENC200 file record
-//      Return an integer count of bytes consumed from the record in creating the PolyTessGeo
-PolyTessGeo *Osenc::BuildPolyTessGeo(_OSENC_AreaGeometry_Record_Payload *record, unsigned char **next_byte )
-{
+// //      Build PolyGeo Object from OSENC200 file record
+// //      Return an integer count of bytes consumed from the record in creating the PolyTessGeo
+// PolyTessGeo *Osenc::BuildPolyTessGeo(_OSENC_AreaGeometry_Record_Payload *record, unsigned char **next_byte )
+// {
 
-    PolyTessGeo *pPTG = new PolyTessGeo();
+//     PolyTessGeo *pPTG = new PolyTessGeo();
 
-    pPTG->SetExtents(record->extent_w_lon, record->extent_s_lat, record->extent_e_lon, record->extent_n_lat);
+//     pPTG->SetExtents(record->extent_w_lon, record->extent_s_lat, record->extent_e_lon, record->extent_n_lat);
 
-    unsigned int n_TriPrim = record->triprim_count;
-    int nContours = record->contour_count;
+//     unsigned int n_TriPrim = record->triprim_count;
+//     int nContours = record->contour_count;
 
-    //  Get a pointer to the payload
-    void *payLoad = &record->payLoad;
+//     //  Get a pointer to the payload
+//     void *payLoad = &record->payLoad;
 
-    //  skip over the contour vertex count array, for now  TODO
-    //uint8_t *pTriPrims = (uint8_t *)payLoad + (nContours * sizeof(uint32_t));
+//     //  skip over the contour vertex count array, for now  TODO
+//     //uint8_t *pTriPrims = (uint8_t *)payLoad + (nContours * sizeof(uint32_t));
 
 
-    //  Create the head of the linked list of TriPrims
-    PolyTriGroup *ppg = new PolyTriGroup;
-    ppg->m_bSMSENC = true;
-    ppg->data_type = DATA_TYPE_DOUBLE;
+//     //  Create the head of the linked list of TriPrims
+//     PolyTriGroup *ppg = new PolyTriGroup;
+//     ppg->m_bSMSENC = true;
+//     ppg->data_type = DATA_TYPE_DOUBLE;
 
 
-    ppg->nContours = nContours;
+//     ppg->nContours = nContours;
 
-    ppg->pn_vertex = (int *)malloc(nContours * sizeof(int));
-    int *pctr = ppg->pn_vertex;
+//     ppg->pn_vertex = (int *)malloc(nContours * sizeof(int));
+//     int *pctr = ppg->pn_vertex;
 
-    //  The point count array is the first element in the payload, length is known
-    int *contour_pointcount_array_run = (int*)payLoad;
-    for(int i=0 ; i < nContours ; i++){
-        *pctr++ = *contour_pointcount_array_run++;
-    }
+//     //  The point count array is the first element in the payload, length is known
+//     int *contour_pointcount_array_run = (int*)payLoad;
+//     for(int i=0 ; i < nContours ; i++){
+//         *pctr++ = *contour_pointcount_array_run++;
+//     }
 
 
-    //  Read Raw Geometry
-//    ppg->pgroup_geom = NULL;
+//     //  Read Raw Geometry
+// //    ppg->pgroup_geom = NULL;
 
 
-    //  Now the triangle primitives
+//     //  Now the triangle primitives
 
-    TriPrim **p_prev_triprim = &(ppg->tri_prim_head);
+//     TriPrim **p_prev_triprim = &(ppg->tri_prim_head);
 
-    //  Read the PTG_Triangle Geometry in a loop
-    unsigned int tri_type;
-    int nvert;
-    int nvert_max = 0;
-    int total_byte_size = 2 * sizeof(float);
+//     //  Read the PTG_Triangle Geometry in a loop
+//     unsigned int tri_type;
+//     int nvert;
+//     int nvert_max = 0;
+//     int total_byte_size = 2 * sizeof(float);
 
-    uint8_t *pPayloadRun = (uint8_t *)contour_pointcount_array_run; //Points to the start of the triangle primitives
+//     uint8_t *pPayloadRun = (uint8_t *)contour_pointcount_array_run; //Points to the start of the triangle primitives
 
-    for(unsigned int i=0 ; i < n_TriPrim ; i++){
-        tri_type = *pPayloadRun++;
-        nvert = *(uint32_t *)pPayloadRun;
-        pPayloadRun += sizeof(uint32_t);
+//     for(unsigned int i=0 ; i < n_TriPrim ; i++){
+//         tri_type = *pPayloadRun++;
+//         nvert = *(uint32_t *)pPayloadRun;
+//         pPayloadRun += sizeof(uint32_t);
 
 
-        TriPrim *tp = new TriPrim;
-        *p_prev_triprim = tp;                               // make the link
-        p_prev_triprim = &(tp->p_next);
-        tp->p_next = NULL;
+//         TriPrim *tp = new TriPrim;
+//         *p_prev_triprim = tp;                               // make the link
+//         p_prev_triprim = &(tp->p_next);
+//         tp->p_next = NULL;
 
-        tp->type = tri_type;
-        tp->nVert = nvert;
+//         tp->type = tri_type;
+//         tp->nVert = nvert;
 
-        nvert_max = wxMax(nvert_max, nvert);       // Keep a running tab of largest vertex count
+//         nvert_max = wxMax(nvert_max, nvert);       // Keep a running tab of largest vertex count
 
-        //  Read the triangle primitive bounding box as lat/lon
+//         //  Read the triangle primitive bounding box as lat/lon
 
-        double minxt, maxxt, minyt, maxyt;
-        #ifdef __arm__
-        double abox[4];
-        memcpy(&abox[0], pPayloadRun, 4 * sizeof(double));
-        minxt = abox[0];
-        maxxt = abox[1];
-        minyt = abox[2];
-        maxyt = abox[3];
-        #else
-        double *pbb = (double *)pPayloadRun;
-        minxt = *pbb++;
-        maxxt = *pbb++;
-        minyt = *pbb++;
-        maxyt = *pbb;
-        #endif
+//         double minxt, maxxt, minyt, maxyt;
+//         #ifdef __arm__
+//         double abox[4];
+//         memcpy(&abox[0], pPayloadRun, 4 * sizeof(double));
+//         minxt = abox[0];
+//         maxxt = abox[1];
+//         minyt = abox[2];
+//         maxyt = abox[3];
+//         #else
+//         double *pbb = (double *)pPayloadRun;
+//         minxt = *pbb++;
+//         maxxt = *pbb++;
+//         minyt = *pbb++;
+//         maxyt = *pbb;
+//         #endif
 
-        tp->tri_box.Set(minyt, minxt, maxyt, maxxt);
+//         tp->tri_box.Set(minyt, minxt, maxyt, maxxt);
 
-        pPayloadRun += 4 * sizeof(double);
+//         pPayloadRun += 4 * sizeof(double);
 
 
-        int byte_size = nvert * 2 * sizeof(float);              // the vertices
-        total_byte_size += byte_size;
+//         int byte_size = nvert * 2 * sizeof(float);              // the vertices
+//         total_byte_size += byte_size;
 
-        tp->p_vertex = (double *)malloc(byte_size);
-        memcpy(tp->p_vertex, pPayloadRun, byte_size);
+//         tp->p_vertex = (double *)malloc(byte_size);
+//         memcpy(tp->p_vertex, pPayloadRun, byte_size);
 
 
-        pPayloadRun += byte_size;
+//         pPayloadRun += byte_size;
 
-    }
+//     }
 
-    if(next_byte)
-        *next_byte = pPayloadRun;
+//     if(next_byte)
+//         *next_byte = pPayloadRun;
 
-    //  Convert the vertex arrays into a single float memory allocation to enable efficient access later
-    unsigned char *vbuf = (unsigned char *)malloc(total_byte_size);
+//     //  Convert the vertex arrays into a single float memory allocation to enable efficient access later
+//     unsigned char *vbuf = (unsigned char *)malloc(total_byte_size);
 
-    TriPrim *p_tp = ppg->tri_prim_head;
-    unsigned char *p_run = vbuf;
-    while( p_tp ) {
-            memcpy(p_run, p_tp->p_vertex, p_tp->nVert * 2 * sizeof(float));
-            free( p_tp->p_vertex );
-            p_tp->p_vertex = (double  *)p_run;
-            p_run += p_tp->nVert * 2 * sizeof(float);
-            p_tp = p_tp->p_next; // pick up the next in chain
-    }
-    ppg->bsingle_alloc = true;
-    ppg->single_buffer = vbuf;
-    ppg->single_buffer_size = total_byte_size;
-    ppg->data_type = DATA_TYPE_FLOAT;
+//     TriPrim *p_tp = ppg->tri_prim_head;
+//     unsigned char *p_run = vbuf;
+//     while( p_tp ) {
+//             memcpy(p_run, p_tp->p_vertex, p_tp->nVert * 2 * sizeof(float));
+//             free( p_tp->p_vertex );
+//             p_tp->p_vertex = (double  *)p_run;
+//             p_run += p_tp->nVert * 2 * sizeof(float);
+//             p_tp = p_tp->p_next; // pick up the next in chain
+//     }
+//     ppg->bsingle_alloc = true;
+//     ppg->single_buffer = vbuf;
+//     ppg->single_buffer_size = total_byte_size;
+//     ppg->data_type = DATA_TYPE_FLOAT;
 
-    pPTG->Set_PolyTriGroup_head(ppg);
-    pPTG->SetnVertexMax( nvert_max );
+//     pPTG->Set_PolyTriGroup_head(ppg);
+//     pPTG->SetnVertexMax( nvert_max );
 
 
-    pPTG->Set_OK( true );
+//     pPTG->Set_OK( true );
 
 
-    return pPTG;
+//     return pPTG;
 
-}
+// }
 
-PolyTessGeo *Osenc::BuildPolyTessGeoF16(_OSENC_AreaGeometryExt_Record_Payload *record, unsigned char **next_byte )
-{
+// PolyTessGeo *Osenc::BuildPolyTessGeoF16(_OSENC_AreaGeometryExt_Record_Payload *record, unsigned char **next_byte )
+// {
 
-    PolyTessGeo *pPTG = new PolyTessGeo();
+//     PolyTessGeo *pPTG = new PolyTessGeo();
 
-    pPTG->SetExtents(record->extent_w_lon, record->extent_s_lat, record->extent_e_lon, record->extent_n_lat);
-    pPTG->m_ref_lat = m_ref_lat;
-    pPTG->m_ref_lon = m_ref_lon;
+//     pPTG->SetExtents(record->extent_w_lon, record->extent_s_lat, record->extent_e_lon, record->extent_n_lat);
+//     pPTG->m_ref_lat = m_ref_lat;
+//     pPTG->m_ref_lon = m_ref_lon;
 
-    unsigned int n_TriPrim = record->triprim_count;
-    int nContours = record->contour_count;
+//     unsigned int n_TriPrim = record->triprim_count;
+//     int nContours = record->contour_count;
 
-    //  Get a pointer to the payload
-    void *payLoad = &record->payLoad;
+//     //  Get a pointer to the payload
+//     void *payLoad = &record->payLoad;
 
-    //  skip over the contour vertex count array, for now  TODO
-    //uint8_t *pTriPrims = (uint8_t *)payLoad + (nContours * sizeof(uint32_t));
+//     //  skip over the contour vertex count array, for now  TODO
+//     //uint8_t *pTriPrims = (uint8_t *)payLoad + (nContours * sizeof(uint32_t));
 
 
-    //  Create the head of the linked list of TriPrims
-    PolyTriGroup *ppg = new PolyTriGroup;
-    ppg->m_bSMSENC = true;
-    ppg->data_type = DATA_TYPE_DOUBLE;
+//     //  Create the head of the linked list of TriPrims
+//     PolyTriGroup *ppg = new PolyTriGroup;
+//     ppg->m_bSMSENC = true;
+//     ppg->data_type = DATA_TYPE_DOUBLE;
 
 
-    ppg->nContours = nContours;
+//     ppg->nContours = nContours;
 
-    ppg->pn_vertex = (int *)malloc(nContours * sizeof(int));
-    int *pctr = ppg->pn_vertex;
+//     ppg->pn_vertex = (int *)malloc(nContours * sizeof(int));
+//     int *pctr = ppg->pn_vertex;
 
-    //  The point count array is the first element in the payload, length is known
-    int *contour_pointcount_array_run = (int*)payLoad;
-    for(int i=0 ; i < nContours ; i++){
-        *pctr++ = *contour_pointcount_array_run++;
-    }
+//     //  The point count array is the first element in the payload, length is known
+//     int *contour_pointcount_array_run = (int*)payLoad;
+//     for(int i=0 ; i < nContours ; i++){
+//         *pctr++ = *contour_pointcount_array_run++;
+//     }
 
 
-    //  Read Raw Geometry
-    //ppg->pgroup_geom = NULL;
+//     //  Read Raw Geometry
+//     //ppg->pgroup_geom = NULL;
 
 
-    //  Now the triangle primitives
+//     //  Now the triangle primitives
 
-    TriPrim **p_prev_triprim = &(ppg->tri_prim_head);
+//     TriPrim **p_prev_triprim = &(ppg->tri_prim_head);
 
-    //  Read the PTG_Triangle Geometry in a loop
-    unsigned int tri_type;
-    int nvert;
-    int nvert_max = 0;
-    int float_total_byte_size = 2 * sizeof(float);
+//     //  Read the PTG_Triangle Geometry in a loop
+//     unsigned int tri_type;
+//     int nvert;
+//     int nvert_max = 0;
+//     int float_total_byte_size = 2 * sizeof(float);
 
-    uint8_t *pPayloadRun = (uint8_t *)contour_pointcount_array_run; //Points to the start of the triangle primitives
+//     uint8_t *pPayloadRun = (uint8_t *)contour_pointcount_array_run; //Points to the start of the triangle primitives
 
-    double scaler = record->scaleFactor;
+//     double scaler = record->scaleFactor;
 
-    if(n_TriPrim){                              // pre-tesselated, or deferred?
-        for(unsigned int i=0 ; i < n_TriPrim ; i++){
-            tri_type = *pPayloadRun++;
-            nvert = *(uint32_t *)pPayloadRun;
-            pPayloadRun += sizeof(uint32_t);
+//     if(n_TriPrim){                              // pre-tesselated, or deferred?
+//         for(unsigned int i=0 ; i < n_TriPrim ; i++){
+//             tri_type = *pPayloadRun++;
+//             nvert = *(uint32_t *)pPayloadRun;
+//             pPayloadRun += sizeof(uint32_t);
 
 
-            TriPrim *tp = new TriPrim;
-            *p_prev_triprim = tp;                               // make the link
-            p_prev_triprim = &(tp->p_next);
-            tp->p_next = NULL;
+//             TriPrim *tp = new TriPrim;
+//             *p_prev_triprim = tp;                               // make the link
+//             p_prev_triprim = &(tp->p_next);
+//             tp->p_next = NULL;
 
-            tp->type = tri_type;
-            tp->nVert = nvert;
+//             tp->type = tri_type;
+//             tp->nVert = nvert;
 
-            nvert_max = wxMax(nvert_max, nvert);       // Keep a running tab of largest vertex count
+//             nvert_max = wxMax(nvert_max, nvert);       // Keep a running tab of largest vertex count
 
-            //  Read the triangle primitive bounding box as F16 SM coords
-            int16_t *pbb = (int16_t *)pPayloadRun;
+//             //  Read the triangle primitive bounding box as F16 SM coords
+//             int16_t *pbb = (int16_t *)pPayloadRun;
 
-            double minxt, minyt, maxxt, maxyt;
-            //double east_min, north_min, east_max, north_max;
+//             double minxt, minyt, maxxt, maxyt;
+//             //double east_min, north_min, east_max, north_max;
 
-            fromSM_Plugin( pbb[0] / scaler, pbb[2] / scaler, m_ref_lat, m_ref_lon, &minyt, &minxt );
-            fromSM_Plugin( pbb[1] / scaler, pbb[3] / scaler, m_ref_lat, m_ref_lon, &maxyt, &maxxt );
+//             fromSM_Plugin( pbb[0] / scaler, pbb[2] / scaler, m_ref_lat, m_ref_lon, &minyt, &minxt );
+//             fromSM_Plugin( pbb[1] / scaler, pbb[3] / scaler, m_ref_lat, m_ref_lon, &maxyt, &maxxt );
 
-            #if 0
-            #ifdef __ARM_ARCH
-            double abox[4];
-            memcpy(&abox[0], pbb, 4 * sizeof(double));
+//             #if 0
+//             #ifdef __ARM_ARCH
+//             double abox[4];
+//             memcpy(&abox[0], pbb, 4 * sizeof(double));
 
-            minxt = abox[0];
-            maxxt = abox[1];
-            minyt = abox[2];
-            maxyt = abox[3];
-            #else
-            minxt = *pbb++;
-            maxxt = *pbb++;
-            minyt = *pbb++;
-            maxyt = *pbb;
-            #endif
-            #endif
-            tp->tri_box.Set(minyt, minxt, maxyt, maxxt);
+//             minxt = abox[0];
+//             maxxt = abox[1];
+//             minyt = abox[2];
+//             maxyt = abox[3];
+//             #else
+//             minxt = *pbb++;
+//             maxxt = *pbb++;
+//             minyt = *pbb++;
+//             maxyt = *pbb;
+//             #endif
+//             #endif
+//             tp->tri_box.Set(minyt, minxt, maxyt, maxxt);
 
-            pPayloadRun += 4 * sizeof(int16_t);
+//             pPayloadRun += 4 * sizeof(int16_t);
 
 
-            int float_byte_size = nvert * 2 * sizeof(float);              // the vertices
-            float_total_byte_size += float_byte_size;
+//             int float_byte_size = nvert * 2 * sizeof(float);              // the vertices
+//             float_total_byte_size += float_byte_size;
 
-            int byte_size = nvert * 2 * sizeof(int16_t);                 // the vertices
+//             int byte_size = nvert * 2 * sizeof(int16_t);                 // the vertices
 
-            tp->p_vertex = (double *)malloc(byte_size);
-            memcpy(tp->p_vertex, pPayloadRun, byte_size);                 //transcribe the uint16_t vertices
+//             tp->p_vertex = (double *)malloc(byte_size);
+//             memcpy(tp->p_vertex, pPayloadRun, byte_size);                 //transcribe the uint16_t vertices
 
 
-            pPayloadRun += byte_size;
+//             pPayloadRun += byte_size;
 
-        }
-    }
+//         }
+//     }
 
-    if(next_byte)
-        *next_byte = pPayloadRun;
+//     if(next_byte)
+//         *next_byte = pPayloadRun;
 
-    if(n_TriPrim){
+//     if(n_TriPrim){
 
-    //  Convert the vertex arrays into a single float memory allocation to enable efficient access later
-        unsigned char *vbuf = (unsigned char *)malloc(float_total_byte_size);
+//     //  Convert the vertex arrays into a single float memory allocation to enable efficient access later
+//         unsigned char *vbuf = (unsigned char *)malloc(float_total_byte_size);
 
-        TriPrim *p_tp = ppg->tri_prim_head;
-        unsigned char *p_run = vbuf;
+//         TriPrim *p_tp = ppg->tri_prim_head;
+//         unsigned char *p_run = vbuf;
 
-        while( p_tp ) {
+//         while( p_tp ) {
 
-            float *p_stuff = (float *)p_run;
-            int16_t *pf16 = (int16_t *)p_tp->p_vertex;
+//             float *p_stuff = (float *)p_run;
+//             int16_t *pf16 = (int16_t *)p_tp->p_vertex;
 
-            for(int i=0 ; i < p_tp->nVert ; i++){
-                float x = (float)(pf16[i * 2] / scaler);
-                float y = (float)(pf16[(i * 2) + 1] / scaler);
+//             for(int i=0 ; i < p_tp->nVert ; i++){
+//                 float x = (float)(pf16[i * 2] / scaler);
+//                 float y = (float)(pf16[(i * 2) + 1] / scaler);
 
-                p_stuff[i * 2] = x;
-                p_stuff[(i * 2) + 1] = y;
-            }
-            free(p_tp->p_vertex);
-            p_tp->p_vertex = (double  *)p_stuff;
+//                 p_stuff[i * 2] = x;
+//                 p_stuff[(i * 2) + 1] = y;
+//             }
+//             free(p_tp->p_vertex);
+//             p_tp->p_vertex = (double  *)p_stuff;
 
-            p_run += p_tp->nVert * 2 * sizeof(float);
-            p_tp = p_tp->p_next; // pick up the next in chain
+//             p_run += p_tp->nVert * 2 * sizeof(float);
+//             p_tp = p_tp->p_next; // pick up the next in chain
 
-        }
-        ppg->bsingle_alloc = true;
-        ppg->single_buffer = vbuf;
-        ppg->single_buffer_size = float_total_byte_size;
-        ppg->data_type = DATA_TYPE_FLOAT;
+//         }
+//         ppg->bsingle_alloc = true;
+//         ppg->single_buffer = vbuf;
+//         ppg->single_buffer_size = float_total_byte_size;
+//         ppg->data_type = DATA_TYPE_FLOAT;
 
-        pPTG->Set_PolyTriGroup_head(ppg);
-        pPTG->SetnVertexMax( nvert_max );
-    }
+//         pPTG->Set_PolyTriGroup_head(ppg);
+//         pPTG->SetnVertexMax( nvert_max );
+//     }
 
-    if(n_TriPrim)
-        pPTG->Set_OK( true );
-    else
-        pPTG->Set_OK( false );                  // mark for deferred tesselation
+//     if(n_TriPrim)
+//         pPTG->Set_OK( true );
+//     else
+//         pPTG->Set_OK( false );                  // mark for deferred tesselation
 
-    return pPTG;
-}
+//     return pPTG;
+// }
 
 
 

@@ -1,15 +1,17 @@
 #pragma once
 #include <wx/string.h>
-
-// fwd-decl para no arrastrar headers
-class s57RegistrarMgr;
+#include <memory>
+#include <string>
 
 class HttpServer {
 public:
-    HttpServer(int port, const wxString& chartsDir, s57RegistrarMgr* registrar);
+    HttpServer(int port, const wxString& chartsDir);
     void start();
+
 private:
+    void handle_client(int client_fd);
+
     int port;
     wxString chartsDir;
-    s57RegistrarMgr* registrar;
+
 };

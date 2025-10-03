@@ -28,6 +28,7 @@
 #ifndef _S52S57_H_
 #define _S52S57_H_
 
+#include "ocpn_plugin_shim.h"
 #include "bbox.h"
 #include "color_types.h"
 
@@ -397,7 +398,7 @@ public:
   double *geoPtz;      // an array[3] for MultiPoint, SM with Z, i.e. depth
   double *geoPtMulti;  // an array[2] for MultiPoint, lat/lon to make bbox
                        // of decomposed points
-  PolyTessGeo *pPolyTessGeo;
+//   PolyTessGeo *pPolyTessGeo;
 
   LLBBox BBObj;  // lat/lon BBox of the rendered object
   double m_lat;  // The lat/lon of the object's "reference" point
@@ -406,7 +407,7 @@ public:
   Rules *CSrules;  // per object conditional symbology
   int bCS_Added;
 
-  S52_TextC *FText;
+//   S52_TextC *FText;
   int bFText_Added;
   wxRect rText;
 

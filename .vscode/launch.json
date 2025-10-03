@@ -7,25 +7,10 @@
       "request": "launch",
       "program": "/home/pi/projects/open-ocharts-query/build/open-ocharts-query",
       "args": [
-        "/home/pi/projects/open-ocharts-query/", //Directory containing libo-charts_pi.so  ORIGINAL: /usr/lib/avnav/plugins/ocharts/lib/opencpn          /home/pi/.var/app/org.opencpn.OpenCPN/lib/opencpn/
-        "/home/pi/projects/open-ocharts-query/data", // Data directory used to laod /home/pi/projects/open-ocharts-query/data/s57data/chartsymbols.xml ORIGINAL: /usr/lib/avnav/plugins/ocharts/share/opencpn
-        "/home/pi/projects/open-ocharts-query/", // Private (or config) dir. Where to find avnav.conf   ORIGINAL: /home/pi/projects/open-ocharts-query
-        "10689",
-        "-l", "logs/query.log",
-        "-u", "/home/pi/Charts",
-        "-d", 1
+        "/home/pi/Desktop/charts_decrypted",
+        "10689"
       ],
-      "environment": [
-        {
-          "name": "DISPLAY",
-          "value": ":99"
-        },
-        {
-          "name": "LD_LIBRARY_PATH",
-          "value": "/home/pi/.var/app/org.opencpn.OpenCPN/lib"
-        }
-      ],
-      "preLaunchTask": "start-xvfb",
+      
       "stopAtEntry": false,
       "cwd": "/home/pi/projects/open-ocharts-query",
       "externalConsole": false,
